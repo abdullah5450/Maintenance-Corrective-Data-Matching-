@@ -1,0 +1,70 @@
+Loading necessary packages
+import pandas as pd
+import nltk
+from rake_nltk import Rake
+import re
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+doc_A = pd.read_excel("DocA.xlsx", header = 0)
+doc_B = pd.read_excel("DocB.xlsx", header = 0)
+# Function for removing stopwords, stemming words and then extracting keywords
+def keyword_extraction(text):
+    stop_words = set(stopwords.words('english'))
+    ps = PorterStemmer()
+    r = Rake()
+    word_tokens = word_tokenize(text)
+    filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words]
+    stemmed_sentence = [ps.stem(w) for w in filtered_sentence]
+    cleaned_text = ' '.join(stemmed_sentence)
+    r.extract_keywords_from_text(cleaned_text)
+    key_phrases = r.get_ranked_phrases()
+    return key_phrases
+    # Function for determining similarity between 2 lists of word using Jaccard similarity
+def Jaccard_Similarity(doc1, doc2): 
+    
+    # List the unique words in a document
+    words_doc1 = set(doc1.lower().split(' ')) 
+    words_doc2 = set(doc2.lower().split(' '))
+    
+    # Find the intersection of words list of doc1 & doc2
+    intersection = words_doc1.intersection(words_doc2)
+
+    # Find the union of words list of doc1 & doc2
+    union = words_doc1.union(words_doc2)
+        
+    # Calculate Jaccard similarity score 
+    # using length of intersection set divided by length of union set
+    return float(len(intersection)) / len(union)
+    cats_corr['Description_Keywords'] =  [keyword_extraction(i) for i in cats_corr['DESCRIPTION'].tolist()]
+    cats_jp['PMDescription_Keywords'] =  [keyword_extraction(i) for i in cats_jp['PM Description '].tolist()]
+    cats_jp['PMDescription_Keywords'] = [' '.join(w) for w in cats_jp['PMDescription_Keywords'].tolist()]
+    #cats_corr['Description_Keywords'] = [w.split(',') for w in cats_corr['Description_Keywords'].tolist()]
+cats_corr['Description_Keywords'] = [' '.join(w) for w in cats_corr['Description_Keywords'].tolist()]
+wonum_jp_match = []
+wonum_jp_ind = []
+# Calculating Jaccard similarity score and filtering out similarity scores of 0.0
+for i in cats_corr['Description_Keywords'].tolist():
+    match_arr = []
+    match_ind = []
+    for j in cats_jp['PMDescription_Keywords'].tolist():
+        sim = Jaccard_Similarity(i,j)
+        if sim>0.0:
+            match_arr.append(sim)
+            match_ind.append(cats_jp['PMDescription_Keywords'].tolist().index(j))
+        
+    wonum_jp_match.append(match_arr)
+    wonum_jp_ind.append(match_ind)
+    unique_inds = [list(dict.fromkeys(i)) for i in wonum_jp_ind]
+jp_list = cats_jp['JP '].tolist()
+# Identifying the related JPs based on the index of the scores > 0.0
+jp_nums = []
+for i in unique_inds:
+    ref_list = [jp_list[j] for j in i]
+    jp_nums.append(ref_list)
+    # Generating the mapping data frame for WONUM and JPs
+wonum_jp_match = pd.DataFrame({
+    'WONUM':cats_corr['WONUM'].tolist(),
+    'JP':jp_nums
+})
+wonum_jp_match.to_excel('WONUM_JP_Jaccard.xlsx', index = False)
